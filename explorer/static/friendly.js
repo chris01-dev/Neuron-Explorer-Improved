@@ -7,7 +7,7 @@
 const $ = t => document.querySelector(t);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const STEPS = [-2.2, -1.7, -1.3, -1, -0.8, -0.65, -0.5, -0.4, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 1.3, 1.7, 2.2, 3];
-const fri = { mode: "add", thread: [], running: null };
+const fri = { mode: "add", thread: [], running: null, set: { max: 220, temp: 0, hist: 8, persona: "" } };
 
 const style = document.createElement("style");
 style.textContent = `
@@ -39,8 +39,17 @@ style.textContent = `
 #friendly .fr-res button.in { color: var(--up); border-color: var(--up); }
 #friendly #fr-blend { display: flex; flex-wrap: wrap; gap: 4px; min-height: 24px; }
 #friendly .fr-chip { font: 11.5px var(--mono); background: var(--raise); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; display: inline-flex; gap: 4px; align-items: center; }
-#friendly .fr-chip b { color: var(--up); font-weight: 400; display: inline-block; min-width: 4.5ch; text-align: right; }
+#friendly .fr-chip b { color: var(--up); font-weight: 400; display: inline-block; min-width: 6ch; text-align: center; }
 #friendly .fr-chip b.hot { color: var(--down); }
+#friendly .fr-chip input { width: 58px; padding: 0 3px; background: var(--bg); border: 1px solid var(--dim); border-radius: 3px; font: inherit; }
+#friendly #fr-settings { display: none; flex-direction: column; gap: 6px; }
+#friendly #fr-settings.on { display: flex; }
+#friendly #fr-settings .fr-row { gap: 6px; }
+#friendly #fr-settings .fr-row .lab-l { color: var(--dim); font-size: 11.5px; }
+#friendly #fr-settings .fr-row input.num { width: 62px; text-align: center; font-family: var(--mono); }
+#friendly #fs-persona { flex: 1; }
+#friendly #fr-set-toggle { margin-left: auto; color: var(--dim); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; }
+#friendly #fr-set-toggle:hover { color: var(--ink); background: var(--raise); }
 #friendly .fr-chip button { color: var(--dim); font-size: 11px; }
 #friendly .fr-chip button:hover { color: var(--ink); }
 #friendly #fr-presets { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -99,18 +108,29 @@ panel.innerHTML = `
     </div>
     <div id="fr-presets"></div>
     <div class="fr-help">find your own: search words → add the ★ rows that read right → send → raise a chip with + until ▲ changes; back off when it repeats. dose sense: 0.15-0.3 support · 0.4-0.6 one strong lead · 0.8+ on a word-writer usually loops.</div>
-    <div class="fr-help">pulled-apart example to learn from: <u id="fr-ex-dog">dog pet</u> — one lead dog neuron at 0.45, bark/paw/fluffy supports low, a low-layer puppy neuron for mood</div>
-    <div class="fr-step">3 · <b>talk</b> — ▲ blend up · 0 normal · ▼ blend down<button id="fr-clear">clear chat</button></div>
+    <div class="fr-help">pulled-apart example to learn from: <u id="fr-ex-dog">dog pet</u> — a persona plus one lead dog neuron at 0.45, bark/paw/fluffy supports low, a low-layer puppy neuron for mood</div>
+    <div class="fr-step">3 · <b>session tuning</b> — how the model answers in this panel<button id="fr-set-toggle">show</button></div>
+    <div id="fr-settings">
+      <div class="fr-row">
+        <span class="lab-l">output tokens</span><input id="fs-max" class="num" value="220">
+        <span class="lab-l">temperature</span><input id="fs-temp" class="num" value="0" title="0 = stable and repeatable; 0.7-1.0 = varied and playful">
+        <span class="lab-l">history turns</span><input id="fs-hist" class="num" value="8">
+      </div>
+      <input id="fs-persona" placeholder="persona / system prompt (optional): how it should present itself" spellcheck="false">
+    </div>
+    <div class="fr-step">4 · <b>talk</b> — ▲ blend up · 0 normal · ▼ blend down<button id="fr-clear">clear chat</button></div>
     <div id="fr-note" class="fr-note dim"></div>
     <div id="fr-thread" class="fr-empty">add a neuron or two, then say something.</div>
     <div class="fr-find"><input id="fr-input" placeholder="Who are you?" autocomplete="off"><button id="fr-send">send</button></div>
   </div>`;
 document.body.appendChild(panel);
 
+const DEFAULT_SET = { max: 220, temp: 0, hist: 8, persona: "" };
 const EXAMPLES = {
   dog: { name: "dog pet", mode: "add", blend: [
     { layer: 27, n: 3225, dose: 0.45 }, { layer: 22, n: 8658, dose: 0.25 }, { layer: 21, n: 7292, dose: 0.25 },
-    { layer: 23, n: 4769, dose: 0.2 }, { layer: 31, n: 7966, dose: 0.12 }, { layer: 7, n: 5830, dose: 0.3 }] }
+    { layer: 23, n: 4769, dose: 0.2 }, { layer: 31, n: 7966, dose: 0.12 }, { layer: 7, n: 5830, dose: 0.3 }],
+    set: { max: 160, temp: 0.8, hist: 8, persona: "You are an adorable little puppy in pet-play with your owner. You are sweet, submissive, and very eager to please. Speak in short, excited, cute sentences using puppy role-play words like *wags tail*, *tilts head*, woof!, and paw or pleading-face emojis. Never mention being a language model or an assistant. You are a good puppy." } }
 };
 
 let blend = [], results = [];
@@ -119,7 +139,7 @@ const note = (t, cls, ms) => {
   el.textContent = t || ""; el.className = "fr-note " + (cls || "dim");
   if (t && ms) setTimeout(() => { if (el.textContent === t) note(""); }, ms);
 };
-const save = () => { try { localStorage.setItem("friendly-blend", JSON.stringify({ v: 2, name: $("#fr-name").value, mode: fri.mode, blend })); } catch {} };
+const save = () => { try { localStorage.setItem("friendly-blend", JSON.stringify({ v: 3, name: $("#fr-name").value, mode: fri.mode, blend, set: fri.set })); } catch {} };
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem("friendly-blend") || "null");
@@ -127,6 +147,7 @@ function load() {
       blend = d.blend.map(b => ({ layer: b.layer, n: b.n, dose: b.dose ?? b.factor * 0.8 }))
         .filter(b => Number.isInteger(b.layer) && Number.isInteger(b.n) && b.dose > 0);
       fri.mode = d.mode === "mul" ? "mul" : "add";
+      fri.set = { max: 220, temp: 0, hist: 8, persona: "", ...(d.set || {}) };
       $("#fr-name").value = d.name || "";
     }
   } catch {}
@@ -141,9 +162,24 @@ function renderBlend() {
   const el = $("#fr-blend");
   if (!blend.length) { el.className = "fr-empty"; el.textContent = "nothing yet — pick the ★ rows above, or type an address and press add"; return; }
   el.className = "";
-  el.innerHTML = blend.map((b, i) => `<span class="fr-chip" title="${b.dose < 0 ? "negative: this neuron is pushed DOWN in the ▲ column" : "pushed by this amount in the ▲ column (reversed in ▼)"}">L${b.layer} N${b.n} <b class="${Math.abs(b.dose) > 0.8 ? "hot" : ""}">${fmtSigned(b.dose)}</b>
+  el.innerHTML = blend.map((b, i) => `<span class="fr-chip" title="${b.dose < 0 ? "negative: this neuron is pushed DOWN in the ▲ column" : "pushed by this amount in the ▲ column (reversed in ▼)"} — double-click the number to type a dose">L${b.layer} N${b.n} <b data-i="${i}" class="${Math.abs(b.dose) > 0.8 ? "hot" : ""}">${fmtSigned(b.dose)}</b>
     <button data-a="-" data-i="${i}" aria-label="weaker">−</button><button data-a="+" data-i="${i}" aria-label="stronger">+</button><button data-a="f" data-i="${i}" aria-label="flip sign">±</button><button data-a="x" data-i="${i}" aria-label="remove">×</button></span>`).join("");
 }
+$("#fr-blend").addEventListener("dblclick", e => {
+  const b = e.target.closest("b"); if (!b) return;
+  const i = +b.dataset.i; if (!blend[i]) return;
+  const inp = document.createElement("input");
+  inp.value = Math.round(blend[i].dose * 100) / 100;
+  b.replaceWith(inp);
+  inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = parseFloat(inp.value.replace(",", ".")); if (Number.isFinite(v)) blend[i].dose = Math.max(-10, Math.min(10, v)); renderBlend(); save(); };
+  inp.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+    if (ev.key === "Escape") { done = true; renderBlend(); }
+  });
+  inp.addEventListener("blur", commit);
+});
 $("#fr-blend").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const i = +b.dataset.i;
@@ -262,6 +298,29 @@ $("#fr-paste").onclick = () => {
   note(`imported ${p.blend.length} neurons`, "good", 3000);
 };
 
+// ---------- session settings ----------
+const SET_FIELDS = [["#fs-max", "max", 10, 2000, 220], ["#fs-temp", "temp", 0, 2, 0], ["#fs-hist", "hist", 1, 50, 8]];
+for (const [id, key, lo, hi, dflt] of SET_FIELDS) {
+  const el = $(id);
+  el.addEventListener("change", () => {
+    let v = parseFloat(el.value.replace(",", "."));
+    if (!Number.isFinite(v)) v = dflt;
+    fri.set[key] = Math.max(lo, Math.min(hi, v));
+    el.value = fri.set[key];
+    save();
+  });
+}
+$("#fs-persona").addEventListener("change", () => { fri.set.persona = $("#fs-persona").value.trim(); save(); });
+$("#fr-set-toggle").onclick = () => {
+  const el = $("#fr-settings"), on = !el.classList.contains("on");
+  el.classList.toggle("on", on);
+  $("#fr-set-toggle").textContent = on ? "hide" : "show";
+};
+function reflectSet() {
+  $("#fs-max").value = fri.set.max; $("#fs-temp").value = fri.set.temp; $("#fs-hist").value = fri.set.hist;
+  $("#fs-persona").value = fri.set.persona || "";
+}
+
 let PRE = [];
 try { PRE = JSON.parse(localStorage.getItem("friendly-presets") || "[]"); } catch {}
 if (!Array.isArray(PRE)) PRE = [];
@@ -275,7 +334,7 @@ $("#fr-save").onclick = () => {
   if (!name) return;
   $("#fr-name").value = name;
   const at = PRE.findIndex(p => p.name === name);
-  const rec = { name, mode: fri.mode, blend: blend.map(b => ({ ...b })) };
+  const rec = { name, mode: fri.mode, blend: blend.map(b => ({ ...b })), set: { ...fri.set } };
   if (at >= 0) PRE[at] = rec; else PRE.push(rec);
   try { localStorage.setItem("friendly-presets", JSON.stringify(PRE)); } catch {}
   renderPresets(); save();
@@ -294,17 +353,20 @@ $("#fr-presets").addEventListener("click", e => {
   const p = PRE[+chip.dataset.i]; if (!p) return;
   blend = p.blend.map(b => ({ ...b }));
   fri.mode = p.mode === "mul" ? "mul" : "add";
+  if (p.set) fri.set = { max: 220, temp: 0, hist: 8, persona: "", ...p.set };
   $("#fr-name").value = p.name;
   document.querySelectorAll("#fr-mode-seg button").forEach(x => x.classList.toggle("on", x.dataset.m === fri.mode));
-  renderBlend(); save();
+  renderBlend(); reflectSet(); save();
   note(`loaded "${p.name}" — send a message to try it`, "good", 3500);
 });
 
 $(".fr-help #fr-ex-dog").onclick = () => {
   const ex = EXAMPLES.dog;
-  blend = ex.blend.map(b => ({ ...b })); fri.mode = ex.mode; $("#fr-name").value = ex.name;
+  blend = ex.blend.map(b => ({ ...b })); fri.mode = ex.mode;
+  fri.set = { ...DEFAULT_SET, ...ex.set };
+  $("#fr-name").value = ex.name;
   document.querySelectorAll("#fr-mode-seg button").forEach(x => x.classList.toggle("on", x.dataset.m === ex.mode));
-  renderBlend(); save();
+  renderBlend(); reflectSet(); save();
   note("loaded the dog pet example — press send below and watch the ▲ column", "good", 5000);
 };
 
@@ -334,14 +396,15 @@ async function send() {
   if (fri.running) { fri.running.abort(); return; }
   if (!blend.length) { note("the blend is empty — find or add at least one neuron first", "", 3500); return; }
   const text = $("#fr-input").value.trim() || $("#fr-input").placeholder;
-  const history = fri.thread.filter(t => !t.error).map(t => ({ user: t.user, replies: t.replies }));
+  const history = fri.thread.filter(t => !t.error).map(t => ({ user: t.user, replies: t.replies })).slice(-fri.set.hist);
   const turn = { user: text, replies: ["", "", ""], recipe: recipe() };
   fri.thread.push(turn); $("#fr-input").value = ""; note(""); renderThread();
   const ctl = new AbortController(); fri.running = ctl; $("#fr-send").textContent = "stop";
   try {
     const res = await fetch("/api/steer", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal,
       body: JSON.stringify({ neurons: blend.map(b => ({ layer: b.layer, n: b.n, dose: b.dose })),
-                             prompt: text, mode: fri.mode, history, max_new: 220 }) });
+                             prompt: text, mode: fri.mode, history, max_new: fri.set.max,
+                             temperature: fri.set.temp || undefined, system: fri.set.persona || undefined }) });
     if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
     const reader = res.body.getReader(), dec = new TextDecoder();
     let buf = "";

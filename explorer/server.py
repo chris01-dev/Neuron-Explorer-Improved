@@ -261,7 +261,11 @@ async def steer(req: Request):
                       for x in b.get("neurons") or []]
             if not pushes:
                 pushes = [(int(b["layer"]), int(b["n"]), float(b["dose"]), m0)]
-            for row, delta in rt.steer_multi(pushes, rows, int(b.get("max_new", 300)), cancel):
+            sysmsg = b.get("system")
+            if sysmsg:
+                rows = [[{"role": "system", "content": sysmsg}, *m] for m in rows]
+            temp = float(b["temperature"]) if b.get("temperature") else None
+            for row, delta in rt.steer_multi(pushes, rows, int(b.get("max_new", 300)), cancel, temp):
                 loop.call_soon_threadsafe(q.put_nowait, {"row": row, "t": delta})
         except Exception as e:  # surfaced in the UI next to the chat
             loop.call_soon_threadsafe(q.put_nowait, {"row": None, "error": repr(e)})

@@ -162,9 +162,10 @@ class Runtime:
         Yields (row, text_delta), then (None, None)."""
         yield from self.steer_multi([(layer, n, dose, mode)], rows_messages, max_new, cancel)
 
-    def steer_multi(self, pushes, rows_messages, max_new=200, cancel=None):
+    def steer_multi(self, pushes, rows_messages, max_new=200, cancel=None, temperature=None):
         """steer_stream for any number of neurons at once: pushes = [(layer, n, dose, mode)], all applied together.
-        Each is reversed in row 2 the same way a single neuron is (add: -dose; mul: x -dose)."""
+        Each is reversed in row 2 the same way a single neuron is (add: -dose; mul: x -dose).
+        temperature > 0 samples instead of greedy argmax."""
         self.ensure_loaded()
         with self.lock:
             if cancel is not None and cancel.is_set():
@@ -187,7 +188,8 @@ class Runtime:
                     for _ in range(max_new):
                         if cancel is not None and cancel.is_set():
                             break
-                        nxt = out.logits[:, -1].argmax(-1)
+                        nxt = (torch.multinomial((out.logits[:, -1].float() / temperature).softmax(-1), 1)[:, 0]
+                               if temperature else out.logits[:, -1].argmax(-1))
                         for r in range(3):
                             if done[r]:
                                 continue
