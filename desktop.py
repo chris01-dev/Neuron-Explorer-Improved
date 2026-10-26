@@ -1,18 +1,22 @@
-"""Neuron Explorer as a desktop application: the same web UI inside a native window (WebView2 / Chromium).
+"""Neuron Explorer as a desktop application: the whole UI lives in a native WebView2 window.
 
-Run `python desktop.py` (or the packaged NeuronExplorer.exe): it starts the server, loads the model,
-opens the window, and stops everything the moment the window is closed. Without a WebView2 runtime
-it falls back to opening the system browser instead.
+Running this starts the server, loads the model, and opens the window; closing the window stops
+everything. There is no browser path. If the machine lacks the WebView2 runtime (Windows 11 never
+does; most Windows 10 installs have it), it is installed once from Microsoft and the app restarts
+itself.
 
     python desktop.py            # window; close it to stop
-    python desktop.py --smoke 8 # closes itself after 8 seconds (for testing)
+    python desktop.py --smoke 8  # closes itself after 8 seconds (for testing)
 """
 import importlib.util
 import os
 import socket
+import subprocess
 import sys
+import tempfile
 import threading
 import time
+import urllib.request
 
 import uvicorn
 
@@ -43,11 +47,50 @@ def wait_port(timeout=300):
     return False
 
 
+def fatal(msg):
+    print(f"[desktop] {msg}")
+    try:
+        input("press Enter to close")
+    except EOFError:
+        time.sleep(20)
+    os._exit(1)
+
+
+def webview2_present():
+    if os.name != "nt":
+        return True
+    import winreg
+    guid = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+    for hive, path in ((winreg.HKEY_LOCAL_MACHINE, "Software\\WOW6432Node\\" + guid),
+                       (winreg.HKEY_LOCAL_MACHINE, "Software\\" + guid),
+                       (winreg.HKEY_CURRENT_USER, "Software\\" + guid)):
+        try:
+            with winreg.OpenKey(hive, path) as k:
+                if winreg.QueryValueEx(k, "pv")[0]:
+                    return True
+        except OSError:
+            pass
+    return False
+
+
+def install_webview2():
+    print("[desktop] this app needs the WebView2 window runtime - installing it once from Microsoft ...")
+    print("[desktop] (a small Microsoft component; Windows 11 already has it)")
+    dst = os.path.join(tempfile.gettempdir(), "MicrosoftEdgeWebView2Setup.exe")
+    urllib.request.urlretrieve("https://go.microsoft.com/fwlink/p/?LinkId=2124703", dst)
+    code = subprocess.run([dst, "/install"]).returncode
+    if code != 0 or not webview2_present():
+        fatal(f"the WebView2 install did not complete (code {code}); install it from Microsoft and run again")
+
+
 def main():
     if not wait_port():
-        print("[desktop] the server did not come up in time; check the logs printed above")
-        time.sleep(10)
-        os._exit(1)
+        fatal("the server did not come up in time; check the logs printed above")
+    if os.name == "nt" and not webview2_present() and not os.environ.get("NE_WEBVIEW2_TRIED"):
+        os.environ["NE_WEBVIEW2_TRIED"] = "1"
+        install_webview2()
+        print("[desktop] restarting with the window runtime in place ...")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
     url = f"http://127.0.0.1:{PORT}/"
     smoke = None
     if "--smoke" in sys.argv:
@@ -60,15 +103,7 @@ def main():
             threading.Timer(smoke, win.destroy).start()
         webview.start()
     except Exception as e:
-        print(f"[desktop] native window unavailable ({e!r}); opening the browser instead")
-        import webbrowser
-        webbrowser.open(url)
-        print("[desktop] close this console window to stop the server")
-        try:
-            while True:
-                time.sleep(3600)
-        except KeyboardInterrupt:
-            pass
+        fatal(f"the window could not open ({e!r}); run  uv sync  to repair the environment")
     os._exit(0)
 
 

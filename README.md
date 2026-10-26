@@ -4,18 +4,17 @@ A Windows-ready, user-friendly fork of [lyramakesmusic/neuron-explorer](https://
 
 ## Quick start (Windows, NVIDIA GPU)
 
-Download **NeuronExplorer.exe** from [Releases](../../releases) and run it. The first launch unpacks the app and installs the environment (PyTorch CUDA, a few GB — one time), then opens a native window with the full explorer and fetches the Qwen3.5-4B weights (~9 GB, one time). Everything starts with the program and stops when you close the window.
+Download **NeuronExplorer.exe** from [Releases](../../releases) and run it. The first launch unpacks the app and installs the environment (PyTorch CUDA, a few GB — one time), then opens a native window with the full explorer and fetches the Qwen3.5-4B weights (~9 GB, one time). Everything lives in the window — no browser involved — everything starts with the program and stops when you close the window. The window runtime (WebView2, built into Windows 11 and most Windows 10) installs itself from Microsoft on first run if needed.
 
 From source with [uv](https://docs.astral.sh/uv/):
 
     uv sync
-    uv run python desktop.py            # native window; close it to stop
-    uv run python explorer/server.py    # browser mode at http://127.0.0.1:8791
+    uv run python desktop.py            # the app: native window; close it to stop
 
 ## What this fork adds
 
 - **Windows support**: CUDA builds of PyTorch on Windows, subprocess and agent-tab fixes.
-- **Desktop window**: the same UI in a native WebView2 window (browser fallback); starts with the program, stops on close.
+- **Desktop window**: the entire UI in a native WebView2 window — starts with the program, stops on close, no browser involved.
 - **Friendly mode** (top right of the header): describe a trait in words ("dog, puppy, bark, fluffy"), pick `★`-verified neurons, blend them at explicit doses, and chat with the steered model in up / normal / down columns. Blends save as presets and share as text — `L27 N3225 +0.45, L21 N7292 -0.5` — where a negative dose pushes a neuron the other way. The built-in `dog pet` example loads a working recipe to pull apart.
 - **Multi-neuron steering across the app**: shift-click neurons to stack several pushes in the original UI's chat.
 - **Single-exe packaging** via PyInstaller (bootstrap auto-installs uv + deps on first run).
