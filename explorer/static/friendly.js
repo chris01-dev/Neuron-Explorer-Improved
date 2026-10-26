@@ -78,6 +78,18 @@ style.textContent = `
 #friendly .fr-turn .fr-cd .lab { color: var(--down); }
 #friendly .fr-turn .err { color: var(--down); font-size: 12px; margin-top: 3px; }
 #friendly .fr-empty { color: var(--faint); font-size: 12px; }
+#friendly .fr-head select { max-width: 120px; font-size: 12px; padding: 4px 6px; }
+#friendly #fr-brain-out { display: flex; flex-direction: column; gap: 4px; max-height: 34vh; overflow-y: auto; font-size: 12px; }
+#friendly #fr-brain-out:not(.fr-empty) { background: rgba(0,0,0,0.18); border-radius: 6px; padding: 8px; }
+#friendly #fr-brain-out .b-status { color: var(--dim); }
+#friendly #fr-brain-out .b-round { color: var(--up); font-size: 11px; margin-top: 8px; }
+#friendly #fr-brain-out .b-thought { color: var(--faint); font-size: 11px; }
+#friendly #fr-brain-out .b-tool { font-family: var(--mono); color: var(--link); font-size: 11.5px; }
+#friendly #fr-brain-out .b-result { color: var(--dim); font-size: 11px; border-left: 2px solid var(--line); padding-left: 6px; }
+#friendly #fr-brain-out .b-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin: 2px 0 4px; }
+#friendly #fr-brain-out .b-cols > div { background: var(--raise); border-radius: 4px; padding: 3px 5px; font-size: 11px; overflow-wrap: anywhere; }
+#friendly #fr-brain-out .b-cols .lab { display: block; font-size: 10px; color: var(--dim); margin-bottom: 2px; }
+#friendly #fr-brain-out .b-done { color: var(--up); margin-top: 6px; }
 #friendly #fr-clear { margin-left: auto; color: var(--dim); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; }
 #friendly #fr-clear:hover { color: var(--ink); background: var(--raise); }
 `;
@@ -92,7 +104,7 @@ $("header").appendChild(toggle);
 const panel = document.createElement("aside");
 panel.id = "friendly";
 panel.innerHTML = `
-  <div class="fr-head"><b>steering</b><input id="fr-name" placeholder="name it (sad qwen…)" spellcheck="false"><button class="fr-close" aria-label="close">×</button></div>
+  <div class="fr-head"><b>steering</b><input id="fr-name" placeholder="name it (sad qwen…)" spellcheck="false"><select id="fr-preset-list" title="load a saved preset"></select><button class="fr-close" aria-label="close">×</button></div>
   <div class="fr-body">
     <div class="fr-step">1 · <b>describe it</b> — words the trait makes the model say or feel</div>
     <div class="fr-find"><input id="fr-q" placeholder="dog, puppy, bark, fluffy" spellcheck="false" autocomplete="off"><button id="fr-find">find neurons</button></div>
@@ -122,6 +134,9 @@ panel.innerHTML = `
     <div id="fr-note" class="fr-note dim"></div>
     <div id="fr-thread" class="fr-empty">add a neuron or two, then say something.</div>
     <div class="fr-find"><input id="fr-input" placeholder="Who are you?" autocomplete="off"><button id="fr-send">send</button></div>
+    <div class="fr-step" style="margin-top:12px">5 · <b>brain</b> — or just say what you want; it finds and tunes the neurons</div>
+    <div class="fr-find"><input id="fr-brain-goal" placeholder="make it talk like a grumpy wizard…" spellcheck="false" autocomplete="off"><button id="fr-brain-go">steer for me</button></div>
+    <div id="fr-brain-out" class="fr-empty">the brain loads a small second model (once), searches neurons, tests them on the live model, and hands you the finished recipe.</div>
   </div>`;
 document.body.appendChild(panel);
 
@@ -130,7 +145,7 @@ const EXAMPLES = {
   dog: { name: "dog pet", mode: "add", blend: [
     { layer: 27, n: 3225, dose: 0.45 }, { layer: 22, n: 8658, dose: 0.25 }, { layer: 21, n: 7292, dose: 0.25 },
     { layer: 23, n: 4769, dose: 0.2 }, { layer: 31, n: 7966, dose: 0.12 }, { layer: 7, n: 5830, dose: 0.3 }],
-    set: { max: 160, temp: 0.8, hist: 8, persona: "You are an adorable little puppy in pet-play with your owner. You are sweet, submissive, and very eager to please. Speak in short, excited, cute sentences using puppy role-play words like *wags tail*, *tilts head*, woof!, and paw or pleading-face emojis. Never mention being a language model or an assistant. You are a good puppy." } }
+    set: { max: 160, temp: 0.8, hist: 8, persona: "" } }
 };
 
 let blend = [], results = [];
@@ -326,6 +341,18 @@ try { PRE = JSON.parse(localStorage.getItem("friendly-presets") || "[]"); } catc
 if (!Array.isArray(PRE)) PRE = [];
 function renderPresets() {
   $("#fr-presets").innerHTML = PRE.map((p, i) => `<span class="fr-pres fr-chip" data-i="${i}" title="click to load this preset">${esc(p.name)} <b>${p.mode === "mul" ? "x" : "+"}${p.blend.length}</b><button data-a="del" data-i="${i}" aria-label="delete preset">×</button></span>`).join("");
+  const sel = $("#fr-preset-list");
+  sel.innerHTML = `<option value="">load…</option>` + PRE.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join("");
+}
+function loadPresetAt(i) {
+  const p = PRE[i]; if (!p) return;
+  blend = p.blend.map(b => ({ ...b }));
+  fri.mode = p.mode === "mul" ? "mul" : "add";
+  if (p.set) fri.set = { max: 220, temp: 0, hist: 8, persona: "", ...p.set };
+  $("#fr-name").value = p.name;
+  document.querySelectorAll("#fr-mode-seg button").forEach(x => x.classList.toggle("on", x.dataset.m === fri.mode));
+  renderBlend(); reflectSet(); save();
+  note(`loaded "${p.name}" — send a message to try it`, "good", 3500);
 }
 $("#fr-save").onclick = () => {
   if (!blend.length) { note("nothing to save — the blend is empty", "", 2500); return; }
@@ -350,14 +377,7 @@ $("#fr-presets").addEventListener("click", e => {
     return;
   }
   const chip = e.target.closest(".fr-pres"); if (!chip) return;
-  const p = PRE[+chip.dataset.i]; if (!p) return;
-  blend = p.blend.map(b => ({ ...b }));
-  fri.mode = p.mode === "mul" ? "mul" : "add";
-  if (p.set) fri.set = { max: 220, temp: 0, hist: 8, persona: "", ...p.set };
-  $("#fr-name").value = p.name;
-  document.querySelectorAll("#fr-mode-seg button").forEach(x => x.classList.toggle("on", x.dataset.m === fri.mode));
-  renderBlend(); reflectSet(); save();
-  note(`loaded "${p.name}" — send a message to try it`, "good", 3500);
+  loadPresetAt(+chip.dataset.i);
 });
 
 $(".fr-help #fr-ex-dog").onclick = () => {
@@ -431,6 +451,59 @@ async function send() {
 $("#fr-send").onclick = send;
 $("#fr-input").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
 $("#fr-clear").onclick = () => { if (fri.running) fri.running.abort(); fri.thread = []; renderThread(); note(""); };
+
+$("#fr-preset-list").addEventListener("change", e => { const v = e.target.value; if (v !== "") loadPresetAt(+v); e.target.value = ""; });
+
+// ---------- brain: natural language -> neuron recipe ----------
+let brainCtl = null;
+const brainOut = (cls, html) => {
+  const el = $("#fr-brain-out");
+  el.classList.remove("fr-empty");
+  const d = document.createElement("div");
+  d.className = cls;
+  d.innerHTML = html;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+};
+async function brainRun() {
+  if (brainCtl) { brainCtl.abort(); return; }
+  const goal = $("#fr-brain-goal").value.trim() || $("#fr-brain-goal").placeholder;
+  $("#fr-brain-out").innerHTML = ""; $("#fr-brain-out").className = "";
+  $("#fr-brain-go").textContent = "stop";
+  brainCtl = new AbortController();
+  note("");
+  try {
+    const res = await fetch("/api/brain/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: brainCtl.signal,
+      body: JSON.stringify({ goal }) });
+    if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let k;
+      while ((k = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, k); buf = buf.slice(k + 1);
+        if (!line.trim()) continue;
+        const ev = JSON.parse(line);
+        if (ev.t === "status") brainOut("b-status", esc(ev.text));
+        if (ev.t === "round") brainOut("b-round", `— round ${ev.i} —`);
+        if (ev.t === "thought") brainOut("b-thought", esc(ev.text));
+        if (ev.t === "tool") brainOut("b-tool", `${esc(ev.name)}(${Object.entries(ev.input || {}).map(([a, b]) => `${a}: ${esc(String(b))}`).join(", ")})`);
+        if (ev.t === "result") brainOut("b-result", esc(ev.text).replace(/\n/g, "<br>"));
+        if (ev.t === "trial") brainOut("b-cols",
+          `<div><span class="lab">▲ up</span>${esc(ev.up)}</div><div><span class="lab">0 neutral</span>${esc(ev.zero)}</div><div><span class="lab">▼ down</span>${esc(ev.down)}</div>`);
+        if (ev.t === "blend") { blend = ev.blend.map(b => ({ layer: b.layer, n: b.n, dose: b.dose })); renderBlend(); save(); }
+        if (ev.t === "done") { brainOut("b-done", "✓ " + esc(ev.summary)); note("brain finished — the recipe is in the blend; talk to it below", "good", 7000); }
+        if (ev.t === "error") { brainOut("b-done", "error: " + esc(ev.error)); note("the brain hit an error — see the log", "warn", 7000); }
+      }
+    }
+  } catch (e) { if (String(e) !== "AbortError") brainOut("b-done", "error: " + esc(String(e))); }
+  brainCtl = null; $("#fr-brain-go").textContent = "steer for me";
+}
+$("#fr-brain-go").onclick = brainRun;
+$("#fr-brain-goal").addEventListener("keydown", e => { if (e.key === "Enter") brainRun(); });
+
 
 toggle.onclick = () => {
   const on = !panel.classList.contains("on");

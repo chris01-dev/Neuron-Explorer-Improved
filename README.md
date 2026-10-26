@@ -30,7 +30,8 @@ Needs [uv](https://docs.astral.sh/uv/) only:
 
 - **Windows support**: CUDA builds of PyTorch on Windows, subprocess and agent-tab fixes.
 - **Desktop window**: the entire UI in a native WebView2 window — starts with the program, stops on close, no browser involved.
-- **Friendly mode** (top right of the header): describe a trait in words ("dog, puppy, bark, fluffy"), pick `★`-verified neurons, blend them at explicit doses, and chat with the steered model in up / neutral / down columns. Blends save as named presets and share as text — `L27 N3225 +0.45, L21 N7292 -0.5` — where a negative dose pushes a neuron the other way. The built-in `dog pet` example loads a working recipe to pull apart.
+- **Friendly mode** (top right of the header): describe a trait in words ("dog, puppy, bark, fluffy"), pick `★`-verified neurons, blend them at explicit doses, and chat with the steered model in up / neutral / down columns. Blends save as named presets and share as text — `L27 N3225 +0.45, L21 N7292 -0.5` — where a negative dose pushes a neuron the other way.
+- **The steering brain** (friendly mode, step 5): type what you want in plain words and a small local agent model — the Gemma-4 12B agentic tune, ~7 GB in 4-bit, loaded only when used — searches the lenses, assembles a draft recipe, tests it live on the steered model, critiques its own results and re-doses until done. Natural language in, neuron activations out. Aim its own runs at anything: personalities, concepts, styles. Results vary between runs; the finished recipe lands in your blend for further hand-tuning. `EXPLORER_BRAIN_MODEL` points it at any local model folder.
 - **Multi-neuron steering across the app**: shift-click neurons to stack several pushes in the original UI's chat.
 - **Single-exe packaging** via PyInstaller (the bootstrap auto-installs uv and dependencies on first run).
 
@@ -38,7 +39,8 @@ Needs [uv](https://docs.astral.sh/uv/) only:
 
 - **"the window could not open"** — run `uv sync` once in the app folder to repair the environment, then run again.
 - **Replies never start** — the model is still downloading on first run; give the first setup time proportional to your connection.
-- **Out of VRAM** — close other GPU apps (other local LLMs, games) and run again.
+- **Out of VRAM** — close other GPU apps (other local LLMs, games) and run again. The main app needs ~10 GB; the optional brain adds ~7 GB when invoked.
+- **The brain tab says the app is loading it** — first use loads and quantizes a 24 GB checkpoint into ~7 GB of VRAM; it takes a couple of minutes, once.
 - **The Claude tab** is optional and needs the `claude` CLI installed and logged in; everything else works without it.
 
 Everything below is the original readme.

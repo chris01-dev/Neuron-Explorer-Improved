@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(ROOT, "sweep"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from rank import compute_units  # noqa: E402
 from runtime import NO_MODEL, Runtime  # noqa: E402
+from brain import Brain  # noqa: E402
 
 RUNS, STATS = os.path.join(ROOT, "runs"), os.path.join(ROOT, "stats")
 NAMES = os.path.join(ROOT, "explorer", "names.json")
@@ -1063,6 +1064,40 @@ async def agent_chat(req: Request):
                 await _stop_turn(proc)
             except Exception:
                 pass
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
+
+
+brain = Brain(rt)
+
+
+@app.post("/api/brain/chat")
+async def brain_chat(req: Request):
+    """One natural-language steering request. Body {goal}. Streams NDJSON events: status, round, thought,
+    tool, result, trial, blend, done, error, end."""
+    b = await req.json()
+    loop, q = asyncio.get_running_loop(), asyncio.Queue()
+
+    def emit(ev):
+        loop.call_soon_threadsafe(q.put_nowait, ev)
+
+    def work():
+        try:
+            brain.run(str(b.get("goal", "")), emit)
+        except Exception:
+            import traceback
+            emit({"t": "error", "error": traceback.format_exc()[-1200:]})
+        finally:
+            emit({"t": "end"})
+
+    threading.Thread(target=work, daemon=True).start()
+
+    async def events():
+        while True:
+            ev = await q.get()
+            yield json.dumps(ev) + "\n"
+            if ev.get("t") == "end":
+                break
 
     return StreamingResponse(events(), media_type="application/x-ndjson")
 
