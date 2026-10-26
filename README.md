@@ -1,23 +1,45 @@
 # Neuron Explorer Improved
 
-A Windows-ready, user-friendly fork of [lyramakesmusic/neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) — the steering-first neuron explorer for Qwen3.5-4B.
+A Windows-ready, user-friendly fork of [lyramakesmusic/neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) — the steering-first neuron explorer for **Qwen3.5-4B**. Push neurons, keep every rollout, browse the results, and use **friendly mode** to steer the model's personality and concepts without knowing interpretability jargon.
 
-## Quick start (Windows, NVIDIA GPU)
+## Requirements
 
-Download **NeuronExplorer.exe** from [Releases](../../releases) and run it. The first launch unpacks the app and installs the environment (PyTorch CUDA, a few GB — one time), then opens a native window with the full explorer and fetches the Qwen3.5-4B weights (~9 GB, one time). Everything lives in the window — no browser involved — everything starts with the program and stops when you close the window. The window runtime (WebView2, built into Windows 11 and most Windows 10) installs itself from Microsoft on first run if needed.
+- **Windows 10/11, 64-bit**
+- **NVIDIA GPU**: RTX 20-series (Turing) or newer, with ~12 GB of free VRAM for the 4B model
+- **~30 GB free disk**: PyTorch CUDA (~5 GB) + Qwen3.5-4B weights (~9 GB) + app and caches
+- **Internet on the first run only** — after setup everything runs locally on your machine
+- The window runtime (WebView2) is built into Windows 11 and most Windows 10; if missing it installs itself from Microsoft on first run
 
-From source with [uv](https://docs.astral.sh/uv/):
+## Install — the exe (easiest)
+
+1. Download **`NeuronExplorer.exe`** from [Releases](../../releases).
+2. Double-click it. The first run shows a console that:
+   - unpacks the app to `%LOCALAPPDATA%\NeuronExplorerImproved`,
+   - downloads uv and the Python environment incl. PyTorch CUDA (a few GB, ~5-15 min),
+   - opens the **Neuron Explorer window**, which then fetches the Qwen3.5-4B weights (~9 GB) in the background — the interface is usable immediately; chat replies start once the model is ready (watch `status` in the window).
+3. Closing the window stops everything (server + model). Re-running the exe is instant — nothing installs twice. If a first-run download gets interrupted, just run it again: everything resumes where it left off.
+
+## Install — from source
+
+Needs [uv](https://docs.astral.sh/uv/) only:
 
     uv sync
-    uv run python desktop.py            # the app: native window; close it to stop
+    uv run python desktop.py        # native window; close it to stop
 
 ## What this fork adds
 
 - **Windows support**: CUDA builds of PyTorch on Windows, subprocess and agent-tab fixes.
 - **Desktop window**: the entire UI in a native WebView2 window — starts with the program, stops on close, no browser involved.
-- **Friendly mode** (top right of the header): describe a trait in words ("dog, puppy, bark, fluffy"), pick `★`-verified neurons, blend them at explicit doses, and chat with the steered model in up / normal / down columns. Blends save as presets and share as text — `L27 N3225 +0.45, L21 N7292 -0.5` — where a negative dose pushes a neuron the other way. The built-in `dog pet` example loads a working recipe to pull apart.
+- **Friendly mode** (top right of the header): describe a trait in words ("dog, puppy, bark, fluffy"), pick `★`-verified neurons, blend them at explicit doses, and chat with the steered model in up / neutral / down columns. Blends save as named presets and share as text — `L27 N3225 +0.45, L21 N7292 -0.5` — where a negative dose pushes a neuron the other way. The built-in `dog pet` example loads a working recipe to pull apart.
 - **Multi-neuron steering across the app**: shift-click neurons to stack several pushes in the original UI's chat.
-- **Single-exe packaging** via PyInstaller (bootstrap auto-installs uv + deps on first run).
+- **Single-exe packaging** via PyInstaller (the bootstrap auto-installs uv and dependencies on first run).
+
+## Troubleshooting
+
+- **"the window could not open"** — run `uv sync` once in the app folder to repair the environment, then run again.
+- **Replies never start** — the model is still downloading on first run; give the first setup time proportional to your connection.
+- **Out of VRAM** — close other GPU apps (other local LLMs, games) and run again.
+- **The Claude tab** is optional and needs the `claude` CLI installed and logged in; everything else works without it.
 
 Everything below is the original readme.
 
