@@ -429,7 +429,7 @@ function syncEdge() {
 $("#list-hide").onclick = () => setListHidden(true);
 $("#list-tab").onclick = () => setListHidden(false);
 $("#f-collapse").onclick = () => setFocusCollapsed(true);
-$("#focus-tab").onclick = () => focusEl.classList.contains("on") ? setFocusCollapsed(false) : openClaude();
+$("#focus-tab").onclick = () => focusEl.classList.contains("on") ? setFocusCollapsed(false) : openPanel();
 
 // ---------- focus panel ----------
 const focusEl = $("#focus");
@@ -453,11 +453,10 @@ function markFresh(t) { if (curTab() !== t) tabBtn(t).classList.add("fresh"); }
 function syncTabs() {
   const f = state.focus;
   for (const t of ["examples", "details"]) tabBtn(t).style.display = f ? "" : "none";
-  tabBtn("chat").style.display = f && f.kind === "neuron" ? "" : "none";
-  if (tabBtn(curTab()).style.display === "none") setTab(f ? "examples" : "claude");
+  if (!f && (curTab() === "examples" || curTab() === "details" || curTab() === "chat" || !curTab())) setTab("friendly");
 }
-function openClaude() {
-  focusEl.classList.add("on"); syncTabs(); setTab("claude"); setFocusCollapsed(false); $("#a-input").focus();
+function openPanel() {
+  focusEl.classList.add("on"); syncTabs(); setTab("friendly"); setFocusCollapsed(false);
 }
 
 async function openNeuron(layer, n, kind = "neuron", push = true, fly = true) {
@@ -1048,6 +1047,6 @@ $("#a-input").addEventListener("keydown", e => {
 });
 // the button sends, or stops while Claude works (Enter still sends, which queues while it works)
 $("#a-form").addEventListener("submit", e => { e.preventDefault(); if (agent.ctl) stopAgent(); else sendChat(); });
-$("#a-new").onclick = () => { resetAgent(); clearAgentMarks(); };
+const anew = $("#a-new"); if (anew) anew.onclick = () => { resetAgent(); clearAgentMarks(); };
 loadAgent(); renderAgentActions();
 syncEdge(); updateInsets();
